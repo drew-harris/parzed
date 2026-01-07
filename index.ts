@@ -465,7 +465,9 @@ function findFormAtCursor(
 function extractNamespace(content: string): string {
   // Match (ns some.namespace ...) or (ns some.namespace)
   // Handles: (ns foo.bar), (ns ^:meta foo.bar), (ns ^{:doc "..."} foo.bar)
-  const nsMatch = content.match(/\(\s*ns\s+(?:\^[^\s]+\s+|\^{[^}]*}\s+)?([a-zA-Z][a-zA-Z0-9.*_-]*)/);
+  const nsMatch = content.match(
+    /\(\s*ns\s+(?:\^[^\s]+\s+|\^{[^}]*}\s+)?([a-zA-Z][a-zA-Z0-9.*_-]*)/,
+  );
   if (nsMatch && nsMatch[1]) {
     return nsMatch[1];
   }
@@ -605,16 +607,20 @@ function applyWorkspaceEdit(
     const filePath = fileURLToPath(fileUriStr);
     const contentBefore = readFileSync(filePath, "utf-8");
     const newContent = applyEdits(contentBefore, edits as TextEdit[]);
-    
+
     // Check if LSP already modified the file
     const contentNow = readFileSync(filePath, "utf-8");
     if (contentNow !== contentBefore) {
       console.log(`[applyEdit] FILE ALREADY CHANGED by LSP: ${filePath}`);
-      console.log(`[applyEdit] Before length: ${contentBefore.length}, Now length: ${contentNow.length}`);
+      console.log(
+        `[applyEdit] Before length: ${contentBefore.length}, Now length: ${contentNow.length}`,
+      );
     } else {
-      console.log(`[applyEdit] File unchanged, applying edit ourselves: ${filePath}`);
+      console.log(
+        `[applyEdit] File unchanged, applying edit ourselves: ${filePath}`,
+      );
     }
-    
+
     writeFileSync(filePath, newContent);
     filesChanged.push(filePath);
 
@@ -636,7 +642,9 @@ createServer(async (req: IncomingMessage, res: ServerResponse) => {
       const body = JSON.parse(await readBody(req));
       const { command, file, row, col, ...rest } = body;
 
-      console.log(`[request] command=${command} file=${file} row=${row} col=${col}`);
+      console.log(
+        `[request] command=${command} file=${file} row=${row} col=${col}`,
+      );
 
       // Build args array: [file-uri, row, col, ...extras]
       const uri = fileUri(file);
@@ -653,10 +661,10 @@ createServer(async (req: IncomingMessage, res: ServerResponse) => {
 
       const fullCommand = resolveCommand(command);
       console.log(`[request] resolved command: ${fullCommand}, args:`, args);
-      
+
       const result = await lsp.executeCommand(fullCommand, args);
       console.log(`[result]`, JSON.stringify(result, null, 2));
-      
+
       const { filesChanged } = applyWorkspaceEdit(result, lsp);
       res.end(JSON.stringify({ ok: true, filesChanged }));
     } else if (req.method === "POST" && req.url === "/eval") {
@@ -675,19 +683,27 @@ createServer(async (req: IncomingMessage, res: ServerResponse) => {
             evalCode = form.code;
           } else {
             res.statusCode = 400;
-            res.end(JSON.stringify({ error: "No form found at cursor position" }));
+            res.end(
+              JSON.stringify({ error: "No form found at cursor position" }),
+            );
             return;
           }
         } catch (err: any) {
           res.statusCode = 400;
-          res.end(JSON.stringify({ error: `Could not read file: ${err.message}` }));
+          res.end(
+            JSON.stringify({ error: `Could not read file: ${err.message}` }),
+          );
           return;
         }
       }
 
       if (!evalCode) {
         res.statusCode = 400;
-        res.end(JSON.stringify({ error: "No code provided and no cursor position to find form" }));
+        res.end(
+          JSON.stringify({
+            error: "No code provided and no cursor position to find form",
+          }),
+        );
         return;
       }
 
@@ -711,13 +727,13 @@ createServer(async (req: IncomingMessage, res: ServerResponse) => {
     } else if (req.method === "GET" && req.url?.startsWith("/history")) {
       const url = new URL(req.url, `http://localhost:${PORT}`);
       const last = url.searchParams.get("last");
-      
+
       let results = evalHistory;
       if (last) {
         const n = parseInt(last, 10);
         results = evalHistory.slice(-n);
       }
-      
+
       res.end(JSON.stringify(results));
     } else {
       res.statusCode = 404;
