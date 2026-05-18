@@ -12,7 +12,7 @@ class LSPClient {
   private process: ChildProcess;
   private messageId = 1;
   private pending = new Map<number, { resolve: Function; reject: Function }>();
-  private buffer = "";
+  private buffer = Buffer.alloc(0);
   private initialized = false;
 
   constructor(rootPath: string) {
@@ -28,24 +28,37 @@ class LSPClient {
   }
 
   private onData(chunk: Buffer) {
-    this.buffer += chunk.toString();
+    this.buffer = Buffer.concat([this.buffer, chunk]);
 
     while (true) {
-      const headerMatch = this.buffer.match(/^Content-Length: (\d+)\r\n\r\n/);
-      if (!headerMatch) break;
+      const headerEnd = this.buffer.indexOf("\r\n\r\n");
+      if (headerEnd === -1) break;
+
+      const header = this.buffer.subarray(0, headerEnd).toString("utf-8");
+      const headerMatch = header.match(/(?:^|\r\n)Content-Length:\s*(\d+)/i);
+      if (!headerMatch) {
+        console.error("[lsp] invalid message header:", header);
+        this.buffer = this.buffer.subarray(headerEnd + 4);
+        continue;
+      }
 
       const contentLength = parseInt(headerMatch[1]!, 10);
-      const headerLength = headerMatch[0].length;
+      const bodyStart = headerEnd + 4;
+      const bodyEnd = bodyStart + contentLength;
 
-      if (this.buffer.length < headerLength + contentLength) break;
+      if (this.buffer.length < bodyEnd) break;
 
-      const body = this.buffer.slice(
-        headerLength,
-        headerLength + contentLength,
-      );
-      this.buffer = this.buffer.slice(headerLength + contentLength);
+      const body = this.buffer.subarray(bodyStart, bodyEnd).toString("utf-8");
+      this.buffer = this.buffer.subarray(bodyEnd);
 
-      const msg = JSON.parse(body);
+      let msg: any;
+      try {
+        msg = JSON.parse(body);
+      } catch (err) {
+        console.error("[lsp] invalid JSON message:", err);
+        console.error("[lsp] body:", body);
+        continue;
+      }
 
       if (msg.id !== undefined && this.pending.has(msg.id)) {
         const { resolve, reject } = this.pending.get(msg.id)!;
@@ -245,10 +258,15 @@ class NREPLClient {
     const startTime = Date.now();
 
     return new Promise((resolve, reject) => {
-      // Wrap code in ns switch if needed
-      const wrappedCode = ns !== "user" ? `(in-ns '${ns}) ${code}` : code;
+      let settled = false;
 
-      this.connection!.eval(wrappedCode, (err, results) => {
+      this.connection!.eval(code, ns, (err, results) => {
+        if (settled) return;
+
+        const done = results?.some((r) => r.status?.includes("done"));
+        if (!err && !done) return;
+
+        settled = true;
         const ms = Date.now() - startTime;
 
         if (err) {

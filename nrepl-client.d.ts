@@ -25,6 +25,11 @@ declare module "nrepl-client" {
     ): void;
     eval(
       code: string,
+      ns: string,
+      callback: (err: Error | null, result: EvalResult[]) => void,
+    ): void;
+    eval(
+      code: string,
       session: string | null,
       id: string | null,
       evalFunc: string | null,

@@ -1,0 +1,21 @@
+diff --git a/src/nrepl-client.js b/src/nrepl-client.js
+index 5a6cc3823b5aa4b90aea886256638726313cddda..3105cd49779c894ae3e89447c91380b53f3cce03 100644
+--- a/src/nrepl-client.js
++++ b/src/nrepl-client.js
+@@ -121,12 +121,13 @@ function nreplSend(socket, messageStream, msgSpec, callback) {
+ 
+     function errHandler(err) { errors.push(err); }
+     function msgHandler(_messages) {
+-        var done = _messages.some(function(msg) { return !!msg.status; });
+-            // return msg.status && msg.status.indexOf("done") > -1; });
++        var done = _messages.some(function(msg) {
++            return msg.status && (msg.status.indexOf("done") > -1 || msg.status.indexOf("session-closed") > -1);
++        });
+         messages = messages.concat(_messages);
+         if (!done) return;
+         messageStream.removeListener('error', errHandler);
+-        messageStream.removeListener(msgHandlerName, errHandler);
++        messageStream.removeListener(msgHandlerName, msgHandler);
+         callback && callback(errors.length > 0 ? errors : null, messages);
+     }
+ }
